@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: api-loadtest
+    orgId: 1
+    folder: Performance
+    type: file
+    disableDeletion: true
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

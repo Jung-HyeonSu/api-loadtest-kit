@@ -1,0 +1,88 @@
+name: api-loadtest
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-remote-write-receiver
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - pushgateway
+    restart: unless-stopped
+
+  pushgateway:
+    image: prom/pushgateway:v1.11.3
+    ports:
+      - "127.0.0.1:9091:9091"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in k6/.env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    restart: unless-stopped
+
+  loadtest:
+    image: grafana/k6:2.3.0
+    profiles:
+      - loadtest
+    depends_on:
+      - prometheus
+    working_dir: /work
+    command:
+      - run
+      - --out
+      - experimental-prometheus-rw
+      - --summary-export=/results/${TEST_ID:-api-load-test}.json
+      - /work/api-load-test.js
+    volumes:
+      - ./:/work:ro
+      - ./results:/results
+    environment:
+      BASE_URL: ${BASE_URL:-}
+      API_PATH: ${API_PATH:-}
+      HTTP_METHOD: ${HTTP_METHOD:-GET}
+      BODY_FILE: ${BODY_FILE:-}
+      BODY_JSON: ${BODY_JSON:-}
+      HEADERS_JSON: ${HEADERS_JSON:-}
+      AUTH_HEADER_NAME: ${AUTH_HEADER_NAME:-}
+      AUTH_HEADER_VALUE: ${AUTH_HEADER_VALUE:-}
+      EXPECTED_STATUS: ${EXPECTED_STATUS:-200}
+      EXPECT_JSON: ${EXPECT_JSON:-true}
+      JSON_TYPE: ${JSON_TYPE:-any}
+      MIN_ITEMS: ${MIN_ITEMS:-0}
+      FAILURE_RATE: ${FAILURE_RATE:-0.01}
+      CHECK_SUCCESS_RATE: ${CHECK_SUCCESS_RATE:-0.99}
+      RATE: ${RATE:-1}
+      DURATION: ${DURATION:-1m}
+      PREALLOCATED_VUS: ${PREALLOCATED_VUS:-10}
+      MAX_VUS: ${MAX_VUS:-50}
+      TIMEOUT: ${TIMEOUT:-30s}
+      PAGE_MODE: ${PAGE_MODE:-first}
+      PAGE_FIELD: ${PAGE_FIELD:-}
+      PAGE_COUNT: ${PAGE_COUNT:-1}
+      SMOKE: ${SMOKE:-}
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: p(50),p(95),p(99),avg,max
+      K6_PROMETHEUS_RW_LABELS: testid=${TEST_ID:-api-load-test}
+
+volumes:
+  prometheus-data:
+  grafana-data:

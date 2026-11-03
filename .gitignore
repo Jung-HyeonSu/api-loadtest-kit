@@ -1,0 +1,10 @@
+.DS_Store
+.env
+**/.env
+k6/results/
+results/
+captures/
+*.jsonl
+*.log
+tools/*.class
+tools/build/
